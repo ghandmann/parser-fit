@@ -17,6 +17,7 @@ sub new {
 		records => 0,
 		fh => undef,
 		buffer => "",
+		headerLength => 0,
 	};
 
 	bless($ref, $class);
@@ -39,40 +40,68 @@ sub parse {
 	binmode($input);
 
 	$self->{fh} = $input;
-	$self->_parse_header();
-	$self->_parse_data_records();
-	$self->_parse_crc();
+	my $header = $self->_read_header();
+	$self->{header} = $self->_parse_header($header);
+	#$self->_parse_header();
+	#$self->_parse_data_records();
+	#$self->_parse_crc();
 
 	close($input);
 }
 
-sub _parse_header {
+sub _read_header {
 	my $self = shift;
 
-	$self->_readBytes(1);
-	my $headerLength = unpack("c", $self->_buffer);
-	$self->_debug("HeaderLength: $headerLength Bytes");
+	my $headerLengthByte = $self->_readBytes(1);
+	my $headerLength = unpack("c", $headerLengthByte);
+	$self->{headerLength} = $headerLength;
 
-	# headerLength is the total length, including the headerLengthByte itself
-	# so we only read $headerLength-1 Bytes to get the rest of the header
-	$self->_readBytes($headerLength-1);
-	my ($protocolVersion, $profile, $dataLength, $fileMagic, $crc) = unpack("c s I a4 s", $self->_buffer);
+	# The 1-Byte headerLength field is included in the total header length
+	my $headerWithoutLengthByte = $headerLength - 1;
 
-	croak "File either corrupted or not a real FIT file!" unless($fileMagic eq ".FIT");
+	my $header = $self->_readBytes($headerWithoutLengthByte);
+
+	return $header;
+}
+
+sub _parse_header {
+	my $self = shift;
+	my $header = shift;
+
+	my ($protocolVersion, $profile, $dataLength, $fileMagic, $crc);
+
+	my $headerLength = length $header;
+
+	if($headerLength == 13) {
+		($protocolVersion, $profile, $dataLength, $fileMagic, $crc) = unpack("c s I! a4 s", $header);
+	}
+	elsif($headerLength == 11) {
+		($protocolVersion, $profile, $dataLength, $fileMagic) = unpack("c s I! a4", $header);
+
+		# Short header has no CRC value
+		$crc = undef;
+	}
+	else {
+		croak "Invalid headerLength=${headerLength}! Don't know how to handle this.";
+	}
+
+	croak "File either corrupted or not a real FIT file! (Missing magic '.FIT' string in header)" unless($fileMagic eq ".FIT");
 
 	$self->_debug("ProtocolVersion: $protocolVersion");
 	$self->_debug("Profile: $profile");
 	$self->_debug("DataLength: $dataLength Bytes");
 	$self->_debug("FileMagic: $fileMagic");
-	$self->_debug("CRC: $crc");
+	$self->_debug("CRC: " . (defined($crc) ? $crc : "N/A"));
 
-	$self->{header} = {
+	my $headerInfo = {
 		protocolVersion => $protocolVersion,
 		profile => $profile,
 		dataLength => $dataLength,
 		crc => $crc,
-		eof => $headerLength + $dataLength,
+		eof => $self->{headerLength} + $dataLength,
 	};
+
+	return $headerInfo;
 }
 
 sub _parse_data_records {
@@ -164,12 +193,10 @@ sub _readBytes {
 	my $num = shift;
 
 	$self->{totalBytes} += $num;
-	return read($self->{fh}, $self->{buffer}, $num);
-
-}
-sub _buffer {
-	my $self = shift;
-	return $self->{buffer};
+	my $buffer;
+	my $bytesRead = read($self->{fh}, $buffer, $num);
+	# TODO error handling based on bytesRead
+	return $buffer;
 }
 
 =head1 PUBLIC INTERFACE
