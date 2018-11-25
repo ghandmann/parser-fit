@@ -42,8 +42,10 @@ sub parse {
 	$self->{fh} = $input;
 	my $header = $self->_read_header();
 	$self->{header} = $self->_parse_header($header);
-	#$self->_parse_header();
-	#$self->_parse_data_records();
+	my $dataBody = $self->_readBytes($self->{header}->{dataLength});
+	$self->_debug("Data body has $dataBody bytes");
+	exit;
+	$self->_parse_data_records();
 	#$self->_parse_crc();
 
 	close($input);
@@ -104,6 +106,23 @@ sub _parse_header {
 	return $headerInfo;
 }
 
+sub _parse_record_header {
+	my $self = shift;
+	my $recordHeader = shift;
+
+	return {
+		# Bit 8 inidcates a normal header (=0) or "something else"
+		isNormalHeader => !vec($recordHeader, 8, 1),
+		# Bit 7 indicates a definition msg
+		isDefinitionMessage => vec($recordHeader, 7, 1),
+		# Bit 6 indicates "developer data flag"
+		isDeveloperData => vec($recordHeader, 6, 1),
+		# Bit 5 is reserved
+		# Bits 4-1 define the localMessageType
+		localMessageType => $recordHeader & 0xF,
+	};
+}
+
 sub _parse_data_records {
 	my $self = shift;
 
@@ -155,10 +174,11 @@ sub _parse_data_records {
 
 sub _parse_definition_message {
 	my $self = shift;
+	my $data = shift;
 	my $recordLength;
 
-	$self->_readBytes(5);
-	my ($reserved, $arch, $globalMessage, $fields) = unpack("c c s c", $self->_buffer);
+	#$self->_readBytes(5);
+	my ($reserved, $arch, $globalMessage, $fields) = unpack("c c s c", $data);
 
 	$self->_debug("DefinitionMessageHeader:");
 	$self->_debug("Arch: $arch - GlobalMessage: $globalMessage - Fields: $fields");
