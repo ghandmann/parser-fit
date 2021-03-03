@@ -10,34 +10,39 @@ subtest "is normal record header" => sub {
 
     my $notNormalRecordHeader = $fit->_parse_record_header(255);
     ok(!$notNormalRecordHeader->{isNormalHeader}, "this is not a normal record header");
+
+    my $realHeader = $fit->_parse_record_header(79);
+    ok($realHeader->{isNormalHeader}, "is a normal header");
+    ok($realHeader->{isDefinitionMessage}, "is a definition message");
+    is(15, $realHeader->{localMessageType}, "defines local message type 15");
 };
 
 subtest "is definition message" => sub {
     # all bits 1
-    ok($fit->_parse_record_header(255), "is a definition message");
+    ok($fit->_parse_record_header(255)->{isDefinitionMessage}, "255 indicates a definition message");
 
     # only def msg bit 1
-    ok($fit->_parse_record_header(64), "is a definition message");
+    ok($fit->_parse_record_header(64)->{isDefinitionMessage}, "64 indicates a definition message");
 
     # all bits 0
-    ok($fit->_parse_record_header(0), "not a definition message");
+    ok(!$fit->_parse_record_header(0)->{isDefinitionMessage}, "0 does not indicate a definition message");
 
     # only bit 6 == 0
-    ok($fit->_parse_record_header(191), "not a definition message");
+    ok(!$fit->_parse_record_header(191)->{isDefinitionMessage}, "191 does not indicate a definition message");
 };
 
 subtest "is developer data flag message" => sub {
     # all bits 1
-    ok($fit->_parse_record_header(255), "is a definition message");
+    ok($fit->_parse_record_header(255)->{isDeveloperData}, "255 does indicate developer data");
 
     # only def msg bit 1
-    ok($fit->_parse_record_header(32), "is a definition message");
+    ok($fit->_parse_record_header(32)->{isDeveloperData}, "32 does indicate developer data");
 
     # all bits 0
-    ok($fit->_parse_record_header(0), "not a definition message");
+    ok(!$fit->_parse_record_header(0)->{isDeveloperData}, "0 does not indicate developer data");
 
     # only bit 6 == 0
-    ok($fit->_parse_record_header(223), "not a definition message");
+    ok(!$fit->_parse_record_header(223)->{isDeveloperData}, "232 does not indicate developer data");
 };
 
 subtest "localMessageType" => sub {

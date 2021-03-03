@@ -111,14 +111,14 @@ sub _parse_record_header {
 	my $recordHeader = shift;
 
 	return {
-		# Bit 8 inidcates a normal header (=0) or "something else"
-		isNormalHeader => !vec($recordHeader, 8, 1),
-		# Bit 7 indicates a definition msg
-		isDefinitionMessage => vec($recordHeader, 7, 1),
-		# Bit 6 indicates "developer data flag"
-		isDeveloperData => vec($recordHeader, 6, 1),
-		# Bit 5 is reserved
-		# Bits 4-1 define the localMessageType
+		# Bit 7 inidcates a normal header (=0) or "something else"
+		isNormalHeader => (($recordHeader & (1<<7)) == 0),
+		# Bit 6 indicates a definition msg
+		isDefinitionMessage => (($recordHeader & (1<<6)) > 0),
+		# Bit 5 indicates "developer data flag"
+		isDeveloperData => (($recordHeader & (1<<5)) > 0),
+		# Bit 4 is reserved
+		# Bits 3-0 define the localMessageType
 		localMessageType => $recordHeader & 0xF,
 	};
 }
