@@ -18,6 +18,7 @@ sub new {
 		fh => undef,
 		buffer => "",
 		headerLength => 0,
+		totalBytesRead => 0,
 	};
 
 	bless($ref, $class);
@@ -42,9 +43,7 @@ sub parse {
 	$self->{fh} = $input;
 	my $header = $self->_read_header();
 	$self->{header} = $self->_parse_header($header);
-	my $dataBody = $self->_readBytes($self->{header}->{dataLength});
-	$self->_debug("Data body has $dataBody bytes");
-	exit;
+	#my $dataBody = $self->_readBytes($self->{header}->{dataLength});
 	$self->_parse_data_records();
 	#$self->_parse_crc();
 
@@ -127,73 +126,343 @@ sub _parse_data_records {
 	my $self = shift;
 
 	$self->_debug("Parsing Data Records");
-	while($self->{totalBytes} < $self->{header}->{eof}) {
-		$self->_readBytes(1);
-		my ($recordHeaderByte) = unpack("c", $self->_buffer);
-		my $headerType = $recordHeaderByte & 1<<7;
-
+	while($self->{totalBytesRead} < $self->{header}->{eof}) {
+		
+		my ($recordHeaderByte) = unpack("c", $self->_readBytes(1));
+		# my $recordHeaderByte = $self->_readBytes(1);
 		$self->_debug("HeaderBytes in Binary: " . sprintf("%08b", $recordHeaderByte));
+		my $header = $self->_parse_record_header($recordHeaderByte);
 
-		if($headerType == 0) {
-			$self->_debug("Found a normal RecordHeader");
-			my $messageType = $recordHeaderByte & 1<<6;
-			my $localMessageType = $recordHeaderByte & 7; # Bits 0, 1, 2
+		
 
-			$self->{current_local_message_type} = $localMessageType;
+		if($header->{isNormalHeader}) {
+			if($header->{isDeveloperData}) {
+				die "Header indicates message with developer data. Not yet supported!";
+			}
 
-			if($messageType == 0) {
-				$self->_debug("Found a Data Message");
-				if(!defined $self->{localMessages}->[$localMessageType]) {
-					die "localMessage-Data [$localMessageType] received before definition!";
-				}
-
-				$self->{records}++;
-
-				$self->_debug("LocalMessage: $localMessageType - Size: " . $self->{localMessages}->[$localMessageType]->{size} . " Bytes");
-				$self->_debug("skipping Record $self->{records} data section...");
-				$self->_readBytes($self->{localMessages}->[$localMessageType]->{size});
+			if($header->{isDefinitionMessage}) {
+				$self->_debug("Record definition header for LocalMessageType=" . $header->{localMessageType});
+				$self->_parse_definition_message($header->{localMessageType});
 			}
 			else {
-				$self->_debug("Found a Definition Message");
-				$self->_debug("LocalMessage: $localMessageType");
-				if(defined $self->{localMessages}->[$localMessageType]) {
-					die "Redefinition of already defined LocalMessage: $localMessageType @ Byte " . $self->{totalBytes};
+				$self->_debug("Record Header for LocalMessageType=" . $header->{localMessageType});
+				my $localMessage = $self->{localMessages}->[$header->{localMessageType}];
+
+				if(!defined $localMessage) {
+					die "Encountered record for LocalMessageNumber=" . $header->{localMessageType} . " which was not preceded by a matching definition message!";
 				}
-				$self->_parse_definition_message();
-				
+
+				my $recordLength = $localMessage->{size};
+				$self->_debug("Skipping over the next ${recordLength} bytes.");
+				my $record = $self->_readBytes($recordLength);
+
+				my $unpackTemplate = join("", map { $_->{packTemplate} } @{$localMessage->{dataFields}});
+				my @rawFields;
+				foreach($localMessage->{dataFields}) {
+					push(@rawFields, unpack($unpackTemplate, $record));
+				}
+
+				# QuickHack to retrieve total calories
+				if($header->{localMessageType} == 10) {
+					my $total = $rawFields[14];
+					print "### TOTAL CLAORIES: " . $total . "\n";
+				}
 			}
+			
 		}
-		else {
-			$self->_debug("Found a Compressed Timestamp Header");
-			$self->{records}++;
-			die "Please Implement CompressedTimestampHeaders int " . __PACKAGE__ . "!";
-		}
+
+
+		
+
+		# if($headerType == 0) {
+		# 	$self->_debug("Found a normal RecordHeader");
+		# 	my $messageType = $recordHeaderByte & 1<<6;
+		# 	my $localMessageType = $recordHeaderByte & 7; # Bits 0, 1, 2
+
+		# 	$self->{current_local_message_type} = $localMessageType;
+
+		# 	if($messageType == 0) {
+		# 		$self->_debug("Found a Data Message");
+		# 		if(!defined $self->{localMessages}->[$localMessageType]) {
+		# 			die "localMessage-Data [$localMessageType] received before definition!";
+		# 		}
+
+		# 		$self->{records}++;
+
+		# 		$self->_debug("LocalMessage: $localMessageType - Size: " . $self->{localMessages}->[$localMessageType]->{size} . " Bytes");
+		# 		$self->_debug("skipping Record $self->{records} data section...");
+		# 		$self->_readBytes($self->{localMessages}->[$localMessageType]->{size});
+		# 	}
+		# 	else {
+		# 		$self->_debug("Found a Definition Message");
+		# 		$self->_debug("LocalMessage: $localMessageType");
+		# 		if(defined $self->{localMessages}->[$localMessageType]) {
+		# 			die "Redefinition of already defined LocalMessage: $localMessageType @ Byte " . $self->{totalBytes};
+		# 		}
+		# 		$self->_parse_definition_message($self->_readBytes(5));
+				
+		# 	}
+		# }
+		# else {
+		# 	$self->_debug("Found a Compressed Timestamp Header");
+		# 	$self->{records}++;
+		# 	die "Please Implement CompressedTimestampHeaders int " . __PACKAGE__ . "!";
+		# }
 	}
 	$self->_debug("DataRecords finished! Found a total of " . $self->{records} . " Records");
 }
 
 sub _parse_definition_message {
 	my $self = shift;
-	my $data = shift;
+	my $localMessageType = shift;
 	my $recordLength;
+	my $rawEntry;
 
-	#$self->_readBytes(5);
-	my ($reserved, $arch, $globalMessage, $fields) = unpack("c c s c", $data);
+	my $data = $self->_readBytes(5);
+	my ($reserved, $arch, $globalMessage, $fields) = unpack("ccsc", $data);
 
 	$self->_debug("DefinitionMessageHeader:");
-	$self->_debug("Arch: $arch - GlobalMessage: $globalMessage - Fields: $fields");
+	$self->_debug("Arch: $arch - GlobalMessage: " . $self->_get_global_message_type($globalMessage) . " ($globalMessage) - Fields: $fields");
 	carp "BigEndian isn't supported so far!" if($arch == 1);
 
+	$rawEntry .= $data;
+	my @dataFields;
+
 	foreach(1..$fields) {
-		$self->_readBytes(3); # Every Field has 3 Bytes
-		my ($fieldDefinition, $size, $baseType)  = unpack("c c c", $self->_buffer);
-		my ($baseTypeEndian, $baseTypeNumber) = ($baseType & 128, $baseType & 15);
-		$self->_debug("FieldDefinition: Nr: $fieldDefinition, Size: $size, baseTypeEndian: $baseTypeEndian - BaseNr: $baseTypeNumber");
+		my $fieldDefinitionData = $self->_readBytes(3); # Every Field has 3 Bytes
+		$rawEntry .= $fieldDefinitionData;
+		my ($fieldDefinition, $size, $baseTypeData)  = unpack("Ccc", $fieldDefinitionData);
+		my ($baseTypeEndian, $baseTypeNumber) = ($baseTypeData & 128, $baseTypeData & 15);
+		my $baseType = $self->_get_base_type($baseTypeNumber);
+		$self->_debug("FieldDefinition: Nr: $fieldDefinition, Size: $size, BaseType: " . $baseType->{name} . " ($baseTypeNumber), BaseTypeEndian: $baseTypeEndian");
 		$recordLength += $size;
+		push(@dataFields, $baseType);
 	}
 
-	$self->{localMessages}->[$self->{current_local_message_type}] = { size => $recordLength };
+	$self->{localMessages}->[$localMessageType] = { size => $recordLength, dataFields => \@dataFields };
 	$self->_debug("Following Record length: $recordLength bytes");
+
+	$self->_debug("RawEntry: length=" . length($rawEntry) . " - " . join(" ", map { "0x" . $_ } unpack("(H2)*", $rawEntry)));
+}
+sub _get_global_message_type {
+	my $self = shift;
+	my $globaMsgNum = shift;
+
+	# Manufacterer specific message types
+	if($globaMsgNum >= 0xFF00) {
+			return "mfg_range_min";
+	}
+
+	my $globalMessageTypes = {
+		0 => "file_id",
+		1 => "capabilities",
+		2 => "device_settings",
+		3 => "user_profile",
+		4 => "hrm_profile",
+		5 => "sdm_profile",
+		6 => "bike_profile",
+		7 => "zones_target",
+		8 => "hr_zone",
+		9 => "power_zone",
+		10 => "met_zone",
+		12 => "sport",
+		15 => "goal",
+		18 => "session",
+		19 => "lap",
+		20 => "record",
+		21 => "event",
+		23 => "device_info",
+		26 => "workout",
+		27 => "workout_step",
+		28 => "schedule",
+		30 => "weight_scale",
+		31 => "course",
+		32 => "course_point",
+		33 => "totals",
+		34 => "activity",
+		35 => "software",
+		37 => "file_capabilities",
+		38 => "mesg_capabilities",
+		39 => "field_capabilities",
+		49 => "file_creator",
+		51 => "blood_pressure",
+		53 => "speed_zone",
+		55 => "monitoring",
+		72 => "training_file",
+		78 => "hrv",
+		80 => "ant_rx",
+		81 => "ant_tx",
+		82 => "ant_channel_id",
+		101 => "length",
+		103 => "monitoring_info",
+		105 => "pad",
+		106 => "slave_device",
+		127 => "connectivity",
+		128 => "weather_conditions",
+		129 => "weather_alert",
+		131 => "cadence_zone",
+		132 => "hr",
+		142 => "segment_lap",
+		145 => "memo_glob",
+		148 => "segment_id",
+		149 => "segment_leaderboard_entry",
+		150 => "segment_point",
+		151 => "segment_file",
+		158 => "workout_session",
+		159 => "watchface_settings",
+		160 => "gps_metadata",
+		161 => "camera_event",
+		162 => "timestamp_correlation",
+		164 => "gyroscope_data",
+		165 => "accelerometer_data",
+		167 => "three_d_sensor_calibration",
+		169 => "video_frame",
+		174 => "obdii_data",
+		177 => "nmea_sentence",
+		178 => "aviation_attitude",
+		184 => "video",
+		185 => "video_title",
+		186 => "video_description",
+		187 => "video_clip",
+		188 => "ohr_settings",
+		200 => "exd_screen_configuration",
+		201 => "exd_data_field_configuration",
+		202 => "exd_data_concept_configuration",
+		206 => "field_description",
+		207 => "developer_data_id",
+		208 => "magnetometer_data",
+		209 => "barometer_data",
+		210 => "one_d_sensor_calibration",
+		225 => "set",
+		227 => "stress_level",
+		258 => "dive_settings",
+		259 => "dive_gas",
+		262 => "dive_alarm",
+		264 => "exercise_title",
+		268 => "dive_summary",
+		285 => "jump",
+		317 => "climb_pro",
+	};
+
+	return $globalMessageTypes->{$globaMsgNum};
+}
+
+sub _get_base_type {
+	my $self = shift;
+	my $index = shift;
+
+	# See "Table 7. FIT Base Types and Invalid Values" at https://developer.garmin.com/fit/protocol/
+	my $types = [
+		{
+			name => "enum",
+			size => 1,
+			invalid => 0xff,
+			packTemplate => "c",
+		},
+		{
+			name => "sint8",
+			size => 1,
+			invalid => 0x7f,
+			packTemplate => "c"
+		},
+		{
+			name => "uint8",
+			size => 1,
+			invalid => 0xff,
+			packTemplate => "C",
+
+		},
+		{
+			name => "sint16",
+			size => 2,
+			invalid => 0x7fff,
+			packTemplate => "s",
+		},
+		{
+			name => "uint16",
+			size => 2,
+			invalid => 0xffff,
+			packTemplate => "S"
+		},
+		{
+			name => "sint32",
+			size => 4,
+			invalid => 0x7fffffff,
+			packTemplate => "l"
+		},
+		{
+			name => "uint32",
+			size => 4,
+			invalid => 0xffffffff,
+			packTemplate => "L",
+		},
+		{
+			name => "string",
+			size => 1,
+			invalid => 0x00,
+			packTemplate => "a"
+		},
+		{
+			name => "float32",
+			size => 4,
+			invalid => 0xffffffff,
+			packTemplate => "f"
+		},
+		{
+			name => "float64",
+			size => 8,
+			invalid => 0xffffffffffffffff,
+			packTemplate => "d",
+		},
+		{
+			name => "uint8z",
+			size => 1,
+			invalid => 0x00,
+			packTemplate => "c"
+		},
+		{
+			name => "uint16z",
+			size => 2,
+			invalid => 0x0000,
+			packTemplate => "S",
+		},
+		{
+			name => "uint32z",
+			size => 4,
+			invalid => 0x00000000,
+			packTemplate => "L"
+		},
+		{
+			name => "byte",
+			size => 1,
+			invalid => 0xFF,
+			packTemplate => "C",
+		},
+		{
+			name => "sint64",
+			size => 8,
+			invalid => 0x7fffffffffffffff,
+			packTemplate => "q",
+		},
+		{
+			name => "uint64",
+			size => 8,
+			invalid => 0xffffffffffffffff,
+			packTemplate => "Q",
+		},
+		{
+			name => "uint64z",
+			size => 8,
+			invalid => 0x0000000000000000,
+			packTemplate => "Q",
+		}
+	];
+
+	if($index >= @{$types}) {
+		die "Invalid index=$index for BaseTypeLookup!";
+	}
+
+	return $types->[$index];
 }
 
 sub _parse_crc {
@@ -212,7 +481,7 @@ sub _readBytes {
 	my $self = shift;
 	my $num = shift;
 
-	$self->{totalBytes} += $num;
+	$self->{totalBytesRead} += $num;
 	my $buffer;
 	my $bytesRead = read($self->{fh}, $buffer, $num);
 	# TODO error handling based on bytesRead
@@ -223,21 +492,6 @@ sub _readBytes {
 
 =head1 INTERNAL METHODS
 
-=head2 _buffer()
-
-Returns the buffer-Data of the last call to L<_readBytes>.
-
-If nothing has been read so far, will return undef.
-
-=cut
-
-=head2 _readBytes($num)
-
-Reads $num Bytes from the current Filehandle and stores those internally in the Buffer.
-
-To access the buffer see L<_buffer>
-
-=cut
 
 
 1;

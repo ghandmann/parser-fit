@@ -7,7 +7,7 @@ use FIT;
 
 my $fit = FIT->new();
 say $fit;
-$fit->parse("./examples/2013-05-27-18-14-23.fit");
+$fit->parse("./examples/968.fit");
 exit;
 
 my $fitFile = $ARGV[0];
