@@ -18,7 +18,7 @@ my $profile = parseProfileData($data);
 writeProfileModule($profile);
 
 sub writeProfileModule {
-    my $profileFileName = "Profile.pm";
+    my $profileFileName = "./lib/Parser/FIT/Profile.pm";
 
     if(-f $profileFileName and !$forceEnabled) {
         say STDERR "[ERROR] Profile.pm already exists! Use force (--force) to overwrite!";

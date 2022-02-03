@@ -1,7 +1,7 @@
 use Test::More;
-use FIT;
+use Parser::FIT;
 
-my $fit = FIT->new();
+my $fit = Parser::FIT->new();
 
 
 subtest "is normal record header" => sub {

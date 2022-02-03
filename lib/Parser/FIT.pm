@@ -1,11 +1,12 @@
-package FIT;
+package Parser::FIT;
 
 use strict;
 use warnings;
 use Carp qw/croak carp/;
 use feature 'state';
+use Parser::FIT::Profile;
 
-require "Profile.pm";
+#require "Profile.pm";
 
 our $VERSION = 0.01;
 

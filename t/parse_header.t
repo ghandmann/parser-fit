@@ -5,9 +5,9 @@ use 5.10.0;
 use Test::More;
 use Test::Exception;
 
-use FIT;
+use Parser::FIT;
 
-my $fit = FIT->new();
+my $fit = Parser::FIT->new();
 
 subtest 'normal header' => sub {
     my $bytes = pack("C13", (0x10, 0x8C, 0x00, 0xDE, 0x08, 0x00, 0x00, 0x2E, 0x46, 0x49, 0x54, 0x00 ,0x00));

@@ -3,9 +3,9 @@
 use strict;
 use warnings;
 use 5.10.1;
-use FIT;
+use Parser::FIT;
 
-my $fit = FIT->new();
+my $fit = Parser::FIT->new();
 say $fit;
 $fit->parse("./examples/968.fit");
 
