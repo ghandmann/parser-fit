@@ -8,6 +8,8 @@ use FIT;
 my $fit = FIT->new();
 say $fit;
 $fit->parse("./examples/968.fit");
+# $fit->parse("/tmp/2021-06-23-09-38-06.fit");
+#$fit->parse("/tmp/2021-06-23-18-04-36.fit");
 exit;
 
 my $fitFile = $ARGV[0];

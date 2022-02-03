@@ -4,6 +4,8 @@ use strict;
 use warnings;
 use Carp qw/croak carp/;
 
+require "Profile.pm";
+
 our $VERSION = 0.01;
 
 sub new {
@@ -221,6 +223,9 @@ sub _parse_definition_message {
 	my $data = $self->_readBytes(5);
 	my ($reserved, $arch, $globalMessage, $fields) = unpack("ccsc", $data);
 
+	my $globalMessageTypeName = $self->_get_global_message_type($globalMessage);
+	my $globalMessageTypeDefinition = $Parser::FIT::Profile::PROFILE->{$globalMessageTypeName};
+
 	$self->_debug("DefinitionMessageHeader:");
 	$self->_debug("Arch: $arch - GlobalMessage: " . $self->_get_global_message_type($globalMessage) . " ($globalMessage) - Fields: $fields");
 	carp "BigEndian isn't supported so far!" if($arch == 1);
@@ -234,12 +239,14 @@ sub _parse_definition_message {
 		my ($fieldDefinition, $size, $baseTypeData)  = unpack("Ccc", $fieldDefinitionData);
 		my ($baseTypeEndian, $baseTypeNumber) = ($baseTypeData & 128, $baseTypeData & 15);
 		my $baseType = $self->_get_base_type($baseTypeNumber);
-		$self->_debug("FieldDefinition: Nr: $fieldDefinition, Size: $size, BaseType: " . $baseType->{name} . " ($baseTypeNumber), BaseTypeEndian: $baseTypeEndian");
+		my $fieldDefinitionInfo = $globalMessageTypeDefinition->{fields}->{$fieldDefinition};
+		my $fieldName = $fieldDefinitionInfo->{name} || "<UNKNOWN_FIELD_NAME>";
+		$self->_debug("FieldDefinition: Nr: $fieldDefinition (" . $fieldName . "), Size: $size, BaseType: " . $baseType->{name} . " ($baseTypeNumber), BaseTypeEndian: $baseTypeEndian");
 		$recordLength += $size;
 		push(@dataFields, $baseType);
 	}
 
-	$self->{localMessages}->[$localMessageType] = { size => $recordLength, dataFields => \@dataFields };
+	$self->{localMessages}->[$localMessageType] = { size => $recordLength, dataFields => \@dataFields, globalMessageId => $globalMessage };
 	$self->_debug("Following Record length: $recordLength bytes");
 
 	$self->_debug("RawEntry: length=" . length($rawEntry) . " - " . join(" ", map { "0x" . $_ } unpack("(H2)*", $rawEntry)));
