@@ -24,3 +24,5 @@ You may use the command line option `-f` to overwrite an already existing `Profi
 ## Ideas
 
 * Provide an event based interface (like XML::Parser)
+
+signing test commit
