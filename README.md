@@ -17,3 +17,10 @@ Usage:
 
 You may use the command line option `-f` to overwrite an already existing `Profile.pm` file.
 
+## TODOs
+* Write tests to validate message type parsing/naming/lookups
+* Skip over messages with an unknown GlobalMessageNumber
+
+## Ideas
+
+* Provide an event based interface (like XML::Parser)

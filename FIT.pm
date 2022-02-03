@@ -3,6 +3,7 @@ package FIT;
 use strict;
 use warnings;
 use Carp qw/croak carp/;
+use feature 'state';
 
 require "Profile.pm";
 
@@ -21,6 +22,7 @@ sub new {
 		buffer => "",
 		headerLength => 0,
 		totalBytesRead => 0,
+		result => {},
 	};
 
 	bless($ref, $class);
@@ -148,68 +150,24 @@ sub _parse_data_records {
 			}
 			else {
 				$self->_debug("Record Header for LocalMessageType=" . $header->{localMessageType});
-				my $localMessage = $self->{localMessages}->[$header->{localMessageType}];
+				my $localMessage = $self->_parse_local_message_record($header);
 
-				if(!defined $localMessage) {
-					die "Encountered record for LocalMessageNumber=" . $header->{localMessageType} . " which was not preceded by a matching definition message!";
+				if(!defined $localMessage->{globalMessageType}) {
+					$self->_debug("Undefined record. Skipping");
+					next;
 				}
 
-				my $recordLength = $localMessage->{size};
-				$self->_debug("Skipping over the next ${recordLength} bytes.");
-				my $record = $self->_readBytes($recordLength);
+				my $globalMessageName = $localMessage->{globalMessageType}->{name};
 
-				my $unpackTemplate = join("", map { $_->{packTemplate} } @{$localMessage->{dataFields}});
-				my @rawFields;
-				foreach($localMessage->{dataFields}) {
-					push(@rawFields, unpack($unpackTemplate, $record));
+				if(!exists $self->{result}->{$globalMessageName}) {
+					$self->{result}->{$globalMessageName} = [];
 				}
 
-				# QuickHack to retrieve total calories
-				if($header->{localMessageType} == 10) {
-					my $total = $rawFields[14];
-					print "### TOTAL CLAORIES: " . $total . "\n";
-				}
+				push(@{$self->{result}->{$globalMessageName}}, $localMessage->{data});
+
+				$self->{records}++;
 			}
-			
 		}
-
-
-		
-
-		# if($headerType == 0) {
-		# 	$self->_debug("Found a normal RecordHeader");
-		# 	my $messageType = $recordHeaderByte & 1<<6;
-		# 	my $localMessageType = $recordHeaderByte & 7; # Bits 0, 1, 2
-
-		# 	$self->{current_local_message_type} = $localMessageType;
-
-		# 	if($messageType == 0) {
-		# 		$self->_debug("Found a Data Message");
-		# 		if(!defined $self->{localMessages}->[$localMessageType]) {
-		# 			die "localMessage-Data [$localMessageType] received before definition!";
-		# 		}
-
-		# 		$self->{records}++;
-
-		# 		$self->_debug("LocalMessage: $localMessageType - Size: " . $self->{localMessages}->[$localMessageType]->{size} . " Bytes");
-		# 		$self->_debug("skipping Record $self->{records} data section...");
-		# 		$self->_readBytes($self->{localMessages}->[$localMessageType]->{size});
-		# 	}
-		# 	else {
-		# 		$self->_debug("Found a Definition Message");
-		# 		$self->_debug("LocalMessage: $localMessageType");
-		# 		if(defined $self->{localMessages}->[$localMessageType]) {
-		# 			die "Redefinition of already defined LocalMessage: $localMessageType @ Byte " . $self->{totalBytes};
-		# 		}
-		# 		$self->_parse_definition_message($self->_readBytes(5));
-				
-		# 	}
-		# }
-		# else {
-		# 	$self->_debug("Found a Compressed Timestamp Header");
-		# 	$self->{records}++;
-		# 	die "Please Implement CompressedTimestampHeaders int " . __PACKAGE__ . "!";
-		# }
 	}
 	$self->_debug("DataRecords finished! Found a total of " . $self->{records} . " Records");
 }
@@ -221,13 +179,15 @@ sub _parse_definition_message {
 	my $rawEntry;
 
 	my $data = $self->_readBytes(5);
-	my ($reserved, $arch, $globalMessage, $fields) = unpack("ccsc", $data);
+	my ($reserved, $arch, $globalMessageId, $fields) = unpack("ccsc", $data);
 
-	my $globalMessageTypeName = $self->_get_global_message_type($globalMessage);
-	my $globalMessageTypeDefinition = $Parser::FIT::Profile::PROFILE->{$globalMessageTypeName};
+	my $globalMessageType = $self->_get_global_message_type($globalMessageId);
+
+	my $globalMessageTypeName = $globalMessageType->{name};
+	my $globalMessageTypeDefinition = $globalMessageType;
 
 	$self->_debug("DefinitionMessageHeader:");
-	$self->_debug("Arch: $arch - GlobalMessage: " . $self->_get_global_message_type($globalMessage) . " ($globalMessage) - Fields: $fields");
+	$self->_debug("Arch: $arch - GlobalMessage: " . ($self->_global_message_id_to_name($globalMessageId) || "<UNKNOWN_GLOBAL_MESSAGE>") . " ($globalMessageId) - Fields: $fields");
 	carp "BigEndian isn't supported so far!" if($arch == 1);
 
 	$rawEntry .= $data;
@@ -243,24 +203,25 @@ sub _parse_definition_message {
 		my $fieldName = $fieldDefinitionInfo->{name} || "<UNKNOWN_FIELD_NAME>";
 		$self->_debug("FieldDefinition: Nr: $fieldDefinition (" . $fieldName . "), Size: $size, BaseType: " . $baseType->{name} . " ($baseTypeNumber), BaseTypeEndian: $baseTypeEndian");
 		$recordLength += $size;
-		push(@dataFields, $baseType);
+		push(@dataFields, { baseType => $baseType, fieldId => $fieldDefinition, fieldName => $fieldName });
 	}
 
-	$self->{localMessages}->[$localMessageType] = { size => $recordLength, dataFields => \@dataFields, globalMessageId => $globalMessage };
+	$self->{localMessages}->[$localMessageType] = { size => $recordLength, dataFields => \@dataFields, globalMessageId => $globalMessageId };
 	$self->_debug("Following Record length: $recordLength bytes");
 
 	$self->_debug("RawEntry: length=" . length($rawEntry) . " - " . join(" ", map { "0x" . $_ } unpack("(H2)*", $rawEntry)));
 }
-sub _get_global_message_type {
+
+sub _global_message_id_to_name {
 	my $self = shift;
-	my $globaMsgNum = shift;
+	my $globalMessageId = shift;
 
 	# Manufacterer specific message types
-	if($globaMsgNum >= 0xFF00) {
+	if($globalMessageId >= 0xFF00) {
 			return "mfg_range_min";
 	}
 
-	my $globalMessageTypes = {
+	state $globalMessageNames = {
 		0 => "file_id",
 		1 => "capabilities",
 		2 => "device_settings",
@@ -351,7 +312,65 @@ sub _get_global_message_type {
 		317 => "climb_pro",
 	};
 
-	return $globalMessageTypes->{$globaMsgNum};
+	if(exists $globalMessageNames->{$globalMessageId}) {
+		return $globalMessageNames->{$globalMessageId};
+	}
+	else {
+		return undef;
+	}
+}
+
+sub _get_global_message_type {
+	my $self = shift;
+
+	my $globalMessageName = $self->_global_message_id_to_name(shift);
+
+	if(!defined $globalMessageName) {
+		return undef;
+	}
+	
+	if(exists $Parser::FIT::Profile::PROFILE->{$globalMessageName}) {
+		return $Parser::FIT::Profile::PROFILE->{$globalMessageName};
+	}
+	else {
+		return undef;
+	}
+}
+
+sub _parse_local_message_record {
+	my $self = shift;
+	my $header = shift;
+
+	my $localMessage = $self->{localMessages}->[$header->{localMessageType}];
+
+	if(!defined $localMessage) {
+		die "Encountered record for LocalMessageNumber=" . $header->{localMessageType} . " which was not preceded by a matching definition message!";
+	}
+
+	my $recordLength = $localMessage->{size};
+	my $record = $self->_readBytes($recordLength);
+
+	my $unpackTemplate = join("", map { $_->{baseType}->{packTemplate} } @{$localMessage->{dataFields}});
+	my @rawFields;
+	foreach($localMessage->{dataFields}) {
+		push(@rawFields, unpack($unpackTemplate, $record));
+	}
+
+	my $globalMessageType = $self->_get_global_message_type($localMessage->{globalMessageId});
+
+	my %result;
+
+	my $fieldCount = scalar @{$localMessage->{dataFields}};
+	for(my $i = 0; $i < $fieldCount; $i++) {
+		my $localMessageField = $localMessage->{dataFields}->[$i];
+		my $rawValue = @rawFields[$i];
+
+		my $fieldName = $localMessageField->{fieldName};
+
+		$result{$fieldName} = $rawValue; 
+	}
+
+	return { globalMessageType => $globalMessageType, globalMessageId => $localMessage->{globalMessageId}, data => \%result };
 }
 
 sub _get_base_type {
