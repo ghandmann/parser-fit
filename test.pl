@@ -6,8 +6,9 @@ use 5.10.1;
 use Parser::FIT;
 
 my $fit = Parser::FIT->new();
-say $fit;
-$fit->parse("./examples/968.fit");
+
+#$fit->parse("./examples/968.fit");
+$fit->parse("./FitSDKRelease_21.54.01/examples/Activity.fit");
 
 my $conversion = 180/2**31;
 #say "Trackpoints: " . join(";", map { ($_->{position_lat}*$conversion) . "," . ($_->{position_long}*$conversion) } @{$fit->{result}->{record}});
