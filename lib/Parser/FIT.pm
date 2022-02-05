@@ -23,7 +23,6 @@ sub new {
 		buffer => "",
 		headerLength => 0,
 		totalBytesRead => 0,
-		result => {},
 	};
 
 	bless($ref, $class);
@@ -49,10 +48,12 @@ sub parse {
 	my $header = $self->_read_header();
 	$self->{header} = $self->_parse_header($header);
 	#my $dataBody = $self->_readBytes($self->{header}->{dataLength});
-	$self->_parse_data_records();
+	my $result = $self->_parse_data_records();
 	#$self->_parse_crc();
 
 	close($input);
+
+	return $result;
 }
 
 sub _read_header {
@@ -130,6 +131,8 @@ sub _parse_record_header {
 sub _parse_data_records {
 	my $self = shift;
 
+	my $result = {};
+
 	$self->_debug("Parsing Data Records");
 	while($self->{totalBytesRead} < $self->{header}->{eof}) {
 		
@@ -137,8 +140,6 @@ sub _parse_data_records {
 		# my $recordHeaderByte = $self->_readBytes(1);
 		$self->_debug("HeaderBytes in Binary: " . sprintf("%08b", $recordHeaderByte));
 		my $header = $self->_parse_record_header($recordHeaderByte);
-
-		
 
 		if($header->{isNormalHeader}) {
 			if($header->{isDeveloperData}) {
@@ -160,17 +161,19 @@ sub _parse_data_records {
 
 				my $globalMessageName = $localMessage->{globalMessageType}->{name};
 
-				if(!exists $self->{result}->{$globalMessageName}) {
-					$self->{result}->{$globalMessageName} = [];
+				if(!exists $result->{$globalMessageName}) {
+					$result->{$globalMessageName} = [];
 				}
 
-				push(@{$self->{result}->{$globalMessageName}}, $localMessage->{data});
+				push(@{$result->{$globalMessageName}}, $localMessage->{data});
 
 				$self->{records}++;
 			}
 		}
 	}
 	$self->_debug("DataRecords finished! Found a total of " . $self->{records} . " Records");
+
+	return $result;
 }
 
 sub _parse_definition_message {
