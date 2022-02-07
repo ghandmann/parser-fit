@@ -12,6 +12,8 @@ our $VERSION = 0.01;
 
 sub new {
 	my $class = shift;
+	my %options = @_;
+
 	my $ref = {
 		_DEBUG => 1,
 		header => {},
@@ -23,7 +25,12 @@ sub new {
 		buffer => "",
 		headerLength => 0,
 		totalBytesRead => 0,
+		messageHandlers => {},
 	};
+
+	if(exists $options{on}) {
+		$ref->{messageHandlers} = $options{on};
+	}
 
 	bless($ref, $class);
 
@@ -166,6 +173,9 @@ sub _parse_data_records {
 				}
 
 				push(@{$result->{$globalMessageName}}, $localMessage->{data});
+				my $msgType = $globalMessageName;
+				my $msgData = $localMessage->{data};
+				$self->emitRecord($msgType, $msgData);
 
 				$self->{records}++;
 			}
@@ -174,6 +184,45 @@ sub _parse_data_records {
 	$self->_debug("DataRecords finished! Found a total of " . $self->{records} . " Records");
 
 	return $result;
+}
+
+sub on {
+	my $self = shift;
+	my $msgType = shift;
+	my $handler = shift;
+
+	my $msgHandlers = $self->{messageHandlers};
+
+	if($handler) {
+		$msgHandlers->{$msgType} = $handler;
+	}
+	else {
+		delete $msgHandlers->{$msgType};
+	}
+}
+
+sub emitRecord {
+	my $self = shift;
+	my ($msgType, $msgData) = @_;
+
+	if(my $handler = $self->getHandler($msgType)) {
+		$handler->($msgData);
+	}
+
+	if(my $allHandler = $self->getHandler("_any")) {
+		$allHandler->($msgType, $msgData);
+	}
+}
+
+sub getHandler {
+	my $self = shift;
+	my $msgType = shift;
+
+	if(exists $self->{messageHandlers}->{$msgType}) {
+		return $self->{messageHandlers}->{$msgType};
+	}
+
+	return undef;
 }
 
 sub _parse_definition_message {
