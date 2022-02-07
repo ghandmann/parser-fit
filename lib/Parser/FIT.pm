@@ -12,6 +12,8 @@ our $VERSION = 0.01;
 
 sub new {
 	my $class = shift;
+	my %options = @_;
+
 	my $ref = {
 		_DEBUG => 1,
 		header => {},
@@ -23,7 +25,12 @@ sub new {
 		buffer => "",
 		headerLength => 0,
 		totalBytesRead => 0,
+		messageHandlers => {},
 	};
+
+	if(exists $options{on}) {
+		$ref->{messageHandlers} = $options{on};
+	}
 
 	bless($ref, $class);
 
@@ -131,8 +138,6 @@ sub _parse_record_header {
 sub _parse_data_records {
 	my $self = shift;
 
-	my $result = {};
-
 	$self->_debug("Parsing Data Records");
 	while($self->{totalBytesRead} < $self->{header}->{eof}) {
 		
@@ -161,19 +166,54 @@ sub _parse_data_records {
 
 				my $globalMessageName = $localMessage->{globalMessageType}->{name};
 
-				if(!exists $result->{$globalMessageName}) {
-					$result->{$globalMessageName} = [];
-				}
-
-				push(@{$result->{$globalMessageName}}, $localMessage->{data});
+				my $msgType = $globalMessageName;
+				my $msgData = $localMessage->{data};
+				$self->emitRecord($msgType, $msgData);
 
 				$self->{records}++;
 			}
 		}
 	}
 	$self->_debug("DataRecords finished! Found a total of " . $self->{records} . " Records");
+}
 
-	return $result;
+sub on {
+	my $self = shift;
+	my $msgType = shift;
+	my $handler = shift;
+
+	my $msgHandlers = $self->{messageHandlers};
+
+	if($handler) {
+		$msgHandlers->{$msgType} = $handler;
+	}
+	else {
+		delete $msgHandlers->{$msgType};
+	}
+}
+
+sub emitRecord {
+	my $self = shift;
+	my ($msgType, $msgData) = @_;
+
+	if(my $handler = $self->getHandler($msgType)) {
+		$handler->($msgData);
+	}
+
+	if(my $allHandler = $self->getHandler("_any")) {
+		$allHandler->($msgType, $msgData);
+	}
+}
+
+sub getHandler {
+	my $self = shift;
+	my $msgType = shift;
+
+	if(exists $self->{messageHandlers}->{$msgType}) {
+		return $self->{messageHandlers}->{$msgType};
+	}
+
+	return undef;
 }
 
 sub _parse_definition_message {
@@ -518,10 +558,100 @@ sub _readBytes {
 	return $buffer;
 }
 
-=head1 PUBLIC INTERFACE
 
-=head1 INTERNAL METHODS
 
 
 
 1;
+
+
+__END__
+=head1 NAME
+
+Parser::FIT - A parser for garmin FIT (Flexible and Interoperable Data Transfer) files
+
+=head1 SYNOPSIS
+
+  use Parser::FIT;
+
+  my $recordCount = 0;
+  my $parser = Parser::FIT->new(on => {
+    record => sub { $recordMsg = shift; $recordCount++; }
+  });
+
+  $parser->parse("some/file.fit");
+
+  print "The file contained $recordCount records.";
+
+=head1 ALPHA STATUS
+
+The module is in an early alpha status. APIs may change. Parse results may be wrong.
+
+Additionally i will probably not implement the full set of FIT messages.
+I started the module for my personal needs to be able to parse FIT files from my garmin bike computer.
+So results for e.g. a triathlon multisport watch may varry greatly!
+
+But this module is free and open source: Feel free to contribute code, example data, etc!
+
+=head1 METHODS
+
+=head2 new
+
+Create a new L<Parser::FIT> object.
+
+Parameters:
+
+=head2 on
+
+Register and deregister handlers for a parser.
+
+  $parser->on(record => sub { });
+
+Registering and already existing handler overwrites the old one.
+
+  $parser->on(session => sub { say "foo" });
+  $parser->on(session => sub { say "bar" }); # Overwrites the previous handler
+
+Registering a falsy value for a message type will deregister the handler:
+
+  $parser->on(session => undef);
+
+There is currently no check, if the provided message name actually represents an existing one from the FIT specs.
+
+Additionally there is one special message name: C<_any>. Which can be used to receive just every message encountered by the parser:
+
+  $parser->on(_any => sub {
+	  my $msgType = shift;
+	  my $msgData = shift;
+
+	  print "Saw a messafe of type $msgType";
+  });
+
+The C<on> method can also be called from inside a handler callback in order to de-/register handlers based on the stream of events
+
+  # Count the number of records per lap
+  my $lapCount = 0;
+  my $lapResults = [];
+  $parser->on("lap" => sub {
+	  my $lapMsg = shift;
+	  my $lapCount++;
+	  $parser->on("record" => {
+		  $lapResults[$lapCount]++;
+	  });
+  });
+
+=head1 AUTHOR
+
+This module was created by Sven Eppler <ghandi@cpan.org>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2018-2022 by Sven Eppler
+
+This program is free software, you can redistribute it and/or modify it under the terms of the Artistic License version 2.0.
+
+=head1 SEE ALSO
+
+L<Parser::FIT::Simple>, L<Garmin FIT SDK|https://developer.garmin.com/fit/protocol/>
+
+=cut
