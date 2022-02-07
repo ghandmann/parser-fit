@@ -138,8 +138,6 @@ sub _parse_record_header {
 sub _parse_data_records {
 	my $self = shift;
 
-	my $result = {};
-
 	$self->_debug("Parsing Data Records");
 	while($self->{totalBytesRead} < $self->{header}->{eof}) {
 		
@@ -168,11 +166,6 @@ sub _parse_data_records {
 
 				my $globalMessageName = $localMessage->{globalMessageType}->{name};
 
-				if(!exists $result->{$globalMessageName}) {
-					$result->{$globalMessageName} = [];
-				}
-
-				push(@{$result->{$globalMessageName}}, $localMessage->{data});
 				my $msgType = $globalMessageName;
 				my $msgData = $localMessage->{data};
 				$self->emitRecord($msgType, $msgData);
@@ -182,8 +175,6 @@ sub _parse_data_records {
 		}
 	}
 	$self->_debug("DataRecords finished! Found a total of " . $self->{records} . " Records");
-
-	return $result;
 }
 
 sub on {
