@@ -5,6 +5,7 @@ FIT-Profile.csv
 lib/Parser/FIT.pm
 lib/Parser/FIT/Profile.pm
 lib/Parser/FIT/Simple.pm
+Makefile.PL
 MANIFEST
 MANIFEST.SKIP
 README
