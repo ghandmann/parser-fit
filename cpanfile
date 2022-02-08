@@ -1,3 +1,5 @@
+requires 'ExtUtils::MakeMaker' => '6.17';
+
 on 'test' => sub {
     requires 'Test::Exception', '0.43';
 };

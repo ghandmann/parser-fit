@@ -1,7 +1,7 @@
 use 5.010001;
 use strict;
 use warnings;
-use ExtUtils::MakeMaker;
+use ExtUtils::MakeMaker::CPANfile;
 
 my %WriteMakefileArgs = (
     NAME             => 'Parser::FIT',
@@ -10,15 +10,14 @@ my %WriteMakefileArgs = (
     ABSTRACT_FROM    => 'lib/Parser/FIT.pm',
     LICENSE          => 'artistic_2',
     MIN_PERL_VERSION => '5.010001',
-    CONFIGURE_REQUIRES => {
-        'ExtUtils::MakeMaker' => '0',
-    },
-    TEST_REQUIRES => {
-        'Test::More' => '0',
-    },
-    PREREQ_PM => {
-        #'ABC'              => '1.6',
-        #'Foo::Bar::Module' => '5.0401',
+    META_MERGE => {
+        resources => {
+            repository => {
+                type => 'git',
+                url => 'git@github.com:ghandmann/parser-fit.git',
+                web => 'https://github.com/ghandmann/parser-fit',
+            },
+        },
     },
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES => 'Parser-FIT-*' },
