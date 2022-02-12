@@ -243,11 +243,11 @@ sub _parse_definition_message {
 		my ($fieldDefinition, $size, $baseTypeData)  = unpack("Ccc", $fieldDefinitionData);
 		my ($baseTypeEndian, $baseTypeNumber) = ($baseTypeData & 128, $baseTypeData & 15);
 		my $baseType = $self->_get_base_type($baseTypeNumber);
-		my $fieldDefinitionInfo = $globalMessageTypeDefinition->{fields}->{$fieldDefinition};
-		my $fieldName = $fieldDefinitionInfo->{name} || "<UNKNOWN_FIELD_NAME>";
+		my $fieldDescriptor = $globalMessageTypeDefinition->{fields}->{$fieldDefinition};
+		my $fieldName = $fieldDescriptor->{name} || "<UNKNOWN_FIELD_NAME>";
 		$self->_debug("FieldDefinition: Nr: $fieldDefinition (" . $fieldName . "), Size: $size, BaseType: " . $baseType->{name} . " ($baseTypeNumber), BaseTypeEndian: $baseTypeEndian");
 		$recordLength += $size;
-		push(@dataFields, { baseType => $baseType, fieldId => $fieldDefinition, fieldName => $fieldName });
+		push(@dataFields, { baseType => $baseType, fieldId => $fieldDefinition, fieldName => $fieldName, fieldDescriptor => $fieldDescriptor });
 	}
 
 	$self->{localMessages}->[$localMessageType] = { size => $recordLength, dataFields => \@dataFields, globalMessageId => $globalMessageId };
@@ -410,11 +410,40 @@ sub _parse_local_message_record {
 		my $rawValue = @rawFields[$i];
 
 		my $fieldName = $localMessageField->{fieldName};
+		my $fieldDescriptor = $localMessageField->{fieldDescriptor};
 
-		$result{$fieldName} = $rawValue; 
+		my $postProcessedValue = $self->postProcessRawValue($rawValue, $fieldDescriptor);
+
+		$result{$fieldName} = $postProcessedValue;
 	}
 
 	return { globalMessageType => $globalMessageType, globalMessageId => $localMessage->{globalMessageId}, data => \%result };
+}
+
+sub postProcessRawValue {
+	my $self = shift;
+	my $rawValue = shift;
+	my $fieldDescriptor = shift;	
+
+	if(defined $fieldDescriptor->{scale}) {
+		$rawValue /= $fieldDescriptor->{scale};
+	}
+
+	if(defined $fieldDescriptor->{offset}) {
+		$rawValue -= $fieldDescriptor->{offset};
+	}
+
+	if(defined $fieldDescriptor->{unit} && $fieldDescriptor->{unit} eq "semicircles") {
+		state $semicirclesToDegreesConversionRate = 180 / 2**31;
+		$rawValue *= $semicirclesToDegreesConversionRate;
+	}
+
+	if($fieldDescriptor->{type} eq "date_time") {
+		state $fitEpocheOffset = 631065600;
+		$rawValue += $fitEpocheOffset;
+	}
+
+	return $rawValue;
 }
 
 sub _get_base_type {
