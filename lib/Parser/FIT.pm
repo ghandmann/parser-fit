@@ -427,7 +427,7 @@ sub _parse_local_message_record {
 sub postProcessRawValue {
 	my $self = shift;
 	my $rawValue = shift;
-	my $fieldDescriptor = shift;	
+	my $fieldDescriptor = shift;
 
 	if(defined $fieldDescriptor->{scale}) {
 		$rawValue /= $fieldDescriptor->{scale};
@@ -442,7 +442,7 @@ sub postProcessRawValue {
 		$rawValue *= $semicirclesToDegreesConversionRate;
 	}
 
-	if($fieldDescriptor->{type} eq "date_time") {
+	if(defined $fieldDescriptor->{type} && $fieldDescriptor->{type} eq "date_time") {
 		state $fitEpocheOffset = 631065600;
 		$rawValue += $fitEpocheOffset;
 	}
