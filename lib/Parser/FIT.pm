@@ -15,7 +15,7 @@ sub new {
 	my %options = @_;
 
 	my $ref = {
-		_DEBUG => 1,
+		_DEBUG => 0,
 		header => {},
 		body => {},
 		globalMessages => [],
@@ -30,6 +30,10 @@ sub new {
 
 	if(exists $options{on}) {
 		$ref->{messageHandlers} = $options{on};
+	}
+
+	if(exists $options{debug} && $options{debug}) {
+		$ref->{_DEBUG} = 1;
 	}
 
 	bless($ref, $class);
@@ -628,7 +632,13 @@ But this module is free and open source: Feel free to contribute code, example d
 
 Create a new L<Parser::FIT> object.
 
-Parameters:
+  Parser::FIT->new(
+	  debug => 1|0 # enable/disable debug output. Disabled by default
+	  on => { # Provide a hashref of message handlers
+	  	sessiont => sub { },
+		lap => sub { },
+	  }
+  )
 
 =head2 on
 
