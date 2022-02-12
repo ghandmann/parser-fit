@@ -1,5 +1,8 @@
 Revision history for Parser-FIT
 
+Upcoming Release
+        - post-process raw values
+
 0.02    2022-02-08
         - Don't skip Makefile.PL
 
