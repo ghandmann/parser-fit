@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use Carp qw/croak carp/;
 use feature 'state';
+use Math::BigInt;
 use Parser::FIT::Profile;
 
 #require "Profile.pm";
@@ -518,7 +519,7 @@ sub _get_base_type {
 		{
 			name => "float64",
 			size => 8,
-			invalid => 0xffffffffffffffff,
+			invalid => Math::BigInt->new("0xffffffffffffffff"),
 			packTemplate => "d",
 		},
 		{
@@ -548,13 +549,13 @@ sub _get_base_type {
 		{
 			name => "sint64",
 			size => 8,
-			invalid => 0x7fffffffffffffff,
+			invalid => Math::BigInt->new("0x7fffffffffffffff"),
 			packTemplate => "q",
 		},
 		{
 			name => "uint64",
 			size => 8,
-			invalid => 0xffffffffffffffff,
+			invalid => Math::BigInt->new("0xffffffffffffffff"),
 			packTemplate => "Q",
 		},
 		{
