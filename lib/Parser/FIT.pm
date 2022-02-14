@@ -56,16 +56,36 @@ sub parse {
 	open(my $input, "<", $file) or croak "Error opening '$file': $!";
 	binmode($input);
 
+	$self->parse_fh($input);
+}
+
+sub parse_fh {
+	my $self = shift;
+	my $input = shift;
+
+	unless(ref $input eq "GLOB") {
+		die "parse_fh requires an opened filehandle as param!";
+	}
+
+
 	$self->{fh} = $input;
 	my $header = $self->_read_header();
 	$self->{header} = $self->_parse_header($header);
 	#my $dataBody = $self->_readBytes($self->{header}->{dataLength});
-	my $result = $self->_parse_data_records();
+	$self->_parse_data_records();
 	#$self->_parse_crc();
 
 	close($input);
+}
 
-	return $result;
+sub parse_data {
+	my $self = shift;
+	my $data = shift;
+
+	open(my $fh, "<", \$data) or die "Error opening scalar as file: $!";
+	binmode($fh);
+
+	return $self->parse_fh($fh);
 }
 
 sub _read_header {
@@ -688,6 +708,17 @@ The C<on> method can also be called from inside a handler callback in order to d
 	  });
   });
 
+=head2 parse
+
+Parse a file and call registered message handlers.
+
+  $parser->parse('/some/file.fit');
+
+=head2 parse_data
+
+Parse FIT data contained in a scalar and call registered message handlers.
+
+  $parser->parse_data($inMemoryFitData);
 
 =head1 DATA STRUCTURES
 
