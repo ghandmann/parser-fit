@@ -418,7 +418,11 @@ sub _parse_local_message_record {
 
 		my $postProcessedValue = $self->postProcessRawValue($rawValue, $fieldDescriptor);
 
-		$result{$fieldName} = $postProcessedValue;
+		$result{$fieldName} = {
+			value => $postProcessedValue,
+			rawValue => $rawValue,
+			fieldDescriptor => $fieldDescriptor,
+		};
 	}
 
 	return { globalMessageType => $globalMessageType, globalMessageId => $localMessage->{globalMessageId}, data => \%result };
@@ -644,9 +648,11 @@ Create a new L<Parser::FIT> object.
 
 Register and deregister handlers for a parser.
 
-  $parser->on(record => sub { });
+  $parser->on(record => sub { my $message = shift; });
 
-Registering and already existing handler overwrites the old one.
+Concrete message handlers receive on paramter which represents the parsed message. See L</MESSAGES> for more details.
+
+Registering an already existing handler overwrites the old one.
 
   $parser->on(session => sub { say "foo" });
   $parser->on(session => sub { say "bar" }); # Overwrites the previous handler
@@ -657,14 +663,16 @@ Registering a falsy value for a message type will deregister the handler:
 
 There is currently no check, if the provided message name actually represents an existing one from the FIT specs.
 
-Additionally there is one special message name: C<_any>. Which can be used to receive just every message encountered by the parser:
+Additionally there is a special message name: C<_any>. Which can be used to receive just every message encountered by the parser.
+The C<_any> handler receives two parameters. The first one is the C<messageType> which is just a string with the name of the message. The second one is a L<message|/MESSAGES> hash-ref.
 
   $parser->on(_any => sub {
-	  my $msgType = shift;
-	  my $msgData = shift;
+	  my $messageType = shift;
+	  my $message = shift;
 
-	  print "Saw a messafe of type $msgType";
+	  print "Saw a message of type $msgType";
   });
+
 
 The C<on> method can also be called from inside a handler callback in order to de-/register handlers based on the stream of events
 
@@ -678,6 +686,157 @@ The C<on> method can also be called from inside a handler callback in order to d
 		  $lapResults[$lapCount]++;
 	  });
   });
+
+
+=head1 DATA STRUCTURES
+
+This section explains the used data structures you may or may not encounter when using this module.
+
+=head2 MESSAGES
+
+A message is a hash-ref where the keys map to fieldnames defined by the FIT Profile (aka C<Profile.xls>) for the given message.
+
+The FIT protocol defines so called C<local messages> which allow to only store a subset of the so called C<global message>.
+For example the C<session> global message defines 134 fields, but an actually recorded session message in a FIT file may only contain 20 of these.
+
+This way it is possible to create FIT files which only contain the data the device is currently "seeing". But this also means, that this data may change "in-flight".
+For example if a session is started without an heartrate sensor, the include FIT data will not have heartrate related data. When later in the session the user straps on a heartrate sensor
+and pairs it with his device, all upcoming data inside the FIT file will have heartrate data. The same is true for sensors/data that goes away while recording.
+
+Therefore you always have to check if the desired data is actually in the message.
+
+For a list of field names you may expect to see, you can check the Garmin FIT SDK. It includes a C<Profile.xls> file which defines all the valid fields for every global message.
+
+The fields of a message are represented as L<message fields|/MESSAGE-FIELDS>.
+
+An example C<record> message:
+
+  {
+    'speed' => {
+      'fieldDescriptor' => {
+                              'name' => 'speed',
+                              'id' => '6',
+                              'scale' => 1000,
+                              'unit' => 'm/s',
+                              'type' => 'uint16',
+                              'offset' => undef
+                          },
+      'rawValue' => 2100
+      'value' => '2.1',
+    },
+    'position_lat' => {
+        'fieldDescriptor' => { }, # skipped for readability
+        'rawValue' => 574866379,
+        'value' => '48.184743'
+    },
+    'distance' => {
+        'fieldDescriptor' => { }, # skipped for readability
+        'rawValue' => 238,
+        'value' => '2.38',
+    },
+    'heart_rate' => {
+      'fieldDescriptor' => { }, # skipped for readability
+      'value' => 70,
+      'rawValue' => 70
+      },
+    'timestamp' => {
+      'rawValue' => 983200317,
+      'fieldDescriptor' => { }, # skipped for readability
+      'value' => 1614265917
+      },
+    'altitude' => {
+        'value' => '790.8',
+        'fieldDescriptor' => { }, # skipped for readability
+        'rawValue' => 6454
+    },
+    'position_long' => {
+        'fieldDescriptor' => { }, # skipped for readability
+        'value' => '9.102652',
+        'rawValue' => 108598869
+      }
+  }
+=head2 MESSAGE FIELDS
+
+A message field represents actuall data inside a message. It consists of a hash-ref containg:
+
+=over
+
+=item value
+
+The value after L<post processing|/POST-PROCESSING>.
+
+=item rawValue
+
+The original value as it is stored in the FIT file.
+
+=item fieldDescriptor
+
+A hash-ref containing a L<field descriptor|/FIELD-DESCRIPTOR> which describes this field.
+
+=back
+
+=head2 FIELD DESCRIPTOR
+
+A C<field descriptor> is just a hash-ref with some key-value pairs describing the underlying field.
+
+The keys are:
+
+=over
+
+=item id
+
+The id of the field in relation to the message type.
+
+=item name
+
+The name of the field this descriptor represents.
+
+=item unit
+
+The unit of measurement (e.G. C<kcal>, C<m>, C<bpm>).
+
+=item scale
+
+The scale by which the rawValue needs to be scaled.
+
+=item type
+
+The original FIT data type (e.G. C<uint8>, C<date_time>).
+
+=back
+
+The values for these keys are directly taken from the FIT C<Profile.xls>.
+
+
+=head1 POST PROCESSING
+
+=head2 SCALE
+
+The FIT protocol defines for various data fields a scale (e.G. distances define a scale of 100) in order to optimize the low-level storage type.
+
+L<Parser::FIT> divides the C<rawValue> by the scale and stores the result in C<value>. The C<rawValue> stays untouched.
+
+=head2 OFFSET
+
+The FIT protocol defines for various data fields an offset (e.G. altitude values are offset by 500m) in order to optimize the low-level storage type.
+
+L<Parser::FIT> subtracts the offsets from the C<rawValue> and stores the result in C<value>. The C<rawValue> stays untouched.
+
+=head2 CONVERSIONS
+
+The FIT protocol defines various special data types. L<Parser::FIT> converts the following types to "more usefull" ones:
+
+=head3 SEMICRICLES
+
+Fields with the data type C<semicricles> get converted to degrees via this formula: C<degrees = semicircles * (180/2^31)>.
+
+So the C<value> of a field with data type C<semicricles> is in degrees. The C<rawValue> stays in semicircles.
+
+=head3 DATE_TIME
+
+Fields with the data type C<date_time> get converted to unix epoche timestamps via this formula: C<unixTimestamp = fitTimestamp + 631065600>.
+
+Internally FIT is using it's own epoche starting at December 31, 1989 UTC.
 
 =head1 AUTHOR
 
