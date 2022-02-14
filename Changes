@@ -7,6 +7,7 @@ Upcoming Release
         - message fields are hash-refs instead of just scalar values
         - Fix portability warnings
         - Support parsing of FIT data from scalar
+        - Fix array-access syntax
 
 0.02    2022-02-08
         - Don't skip Makefile.PL

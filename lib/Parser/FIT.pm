@@ -432,7 +432,7 @@ sub _parse_local_message_record {
 	my $fieldCount = scalar @{$localMessage->{dataFields}};
 	for(my $i = 0; $i < $fieldCount; $i++) {
 		my $localMessageField = $localMessage->{dataFields}->[$i];
-		my $rawValue = @rawFields[$i];
+		my $rawValue = $rawFields[$i];
 
 		my $fieldName = $localMessageField->{fieldName};
 		my $fieldDescriptor = $localMessageField->{fieldDescriptor};
