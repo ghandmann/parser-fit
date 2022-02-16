@@ -244,41 +244,52 @@ sub getHandler {
 sub _parse_definition_message {
 	my $self = shift;
 	my $localMessageType = shift;
-	my $recordLength;
-	my $rawEntry;
 
 	my $data = $self->_readBytes(5);
 	my ($reserved, $arch, $globalMessageId, $fields) = unpack("ccsc", $data);
 
 	my $globalMessageType = $self->_get_global_message_type($globalMessageId);
 
-	my $globalMessageTypeName = $globalMessageType->{name};
-	my $globalMessageTypeDefinition = $globalMessageType;
-
 	$self->_debug("DefinitionMessageHeader:");
-	$self->_debug("Arch: $arch - GlobalMessage: " . ($self->_global_message_id_to_name($globalMessageId) || "<UNKNOWN_GLOBAL_MESSAGE>") . " ($globalMessageId) - Fields: $fields");
+	$self->_debug("Arch: $arch - GlobalMessage: " . ($globalMessageType->{name} || "<UNKNOWN_GLOBAL_MESSAGE>") . " ($globalMessageId) - #Fields: $fields");
 	carp "BigEndian isn't supported so far!" if($arch == 1);
 
-	$rawEntry .= $data;
+	my $localMessage = $self->_parse_defintion_message_fields($globalMessageType, $fields);
+
+	$self->{localMessages}->[$localMessageType] = $localMessage;
+
+	$self->_debug("Following Record length: " . $localMessage->{size} . " bytes");
+}
+
+sub _parse_defintion_message_fields {
+	my $self = shift;
+	my $globalMessageType = shift;
+	my $numberOfFields = shift;
+
+	my $recordLength = 0;
+
 	my @dataFields;
 
-	foreach(1..$fields) {
+	foreach(1..$numberOfFields) {
 		my $fieldDefinitionData = $self->_readBytes(3); # Every Field has 3 Bytes
-		$rawEntry .= $fieldDefinitionData;
 		my ($fieldDefinition, $size, $baseTypeData)  = unpack("Ccc", $fieldDefinitionData);
 		my ($baseTypeEndian, $baseTypeNumber) = ($baseTypeData & 128, $baseTypeData & 15);
 		my $baseType = $self->_get_base_type($baseTypeNumber);
-		my $fieldDescriptor = $globalMessageTypeDefinition->{fields}->{$fieldDefinition};
+		my $fieldDescriptor = $globalMessageType->{fields}->{$fieldDefinition};
 		my $fieldName = $fieldDescriptor->{name} || "<UNKNOWN_FIELD_NAME>";
 		$self->_debug("FieldDefinition: Nr: $fieldDefinition (" . $fieldName . "), Size: $size, BaseType: " . $baseType->{name} . " ($baseTypeNumber), BaseTypeEndian: $baseTypeEndian");
 		$recordLength += $size;
 		push(@dataFields, { baseType => $baseType, fieldId => $fieldDefinition, fieldName => $fieldName, fieldDescriptor => $fieldDescriptor });
 	}
 
-	$self->{localMessages}->[$localMessageType] = { size => $recordLength, dataFields => \@dataFields, globalMessageId => $globalMessageId };
-	$self->_debug("Following Record length: $recordLength bytes");
+	my $localMessage = {
+		size => $recordLength,
+		dataFields => \@dataFields,
+		globalMessageId => $globalMessageType->{id},
+		globalMessage => $globalMessageType,
+	};
 
-	$self->_debug("RawEntry: length=" . length($rawEntry) . " - " . join(" ", map { "0x" . $_ } unpack("(H2)*", $rawEntry)));
+	return $localMessage;
 }
 
 sub _global_message_id_to_name {
@@ -425,7 +436,7 @@ sub _parse_local_message_record {
 		push(@rawFields, unpack($unpackTemplate, $record));
 	}
 
-	my $globalMessageType = $self->_get_global_message_type($localMessage->{globalMessageId});
+	my $globalMessageType = $localMessage->{globalMessage};
 
 	my %result;
 
