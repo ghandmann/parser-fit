@@ -6,4 +6,6 @@ on 'test' => sub {
 
 on 'develop' => sub {
     requires 'Text::CSV', '2.01';
+    requires 'Devel::Cover', '0.31';
+    requires 'Devel::Cover::Report::Coveralls', '0.31';
 };
