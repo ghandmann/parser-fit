@@ -1,4 +1,5 @@
-requires 'ExtUtils::MakeMaker' => '6.17';
+requires 'ExtUtils::MakeMaker', '6.17';
+requires 'ExtUtils::MakeMaker::CPANfile', '0.09';
 
 on 'test' => sub {
     requires 'Test::Exception', '0.43';
