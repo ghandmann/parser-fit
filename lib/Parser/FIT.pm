@@ -178,7 +178,7 @@ sub _parse_data_records {
 
 			if($header->{isDefinitionMessage}) {
 				$self->_debug("Record definition header for LocalMessageType=" . $header->{localMessageType});
-				$self->_parse_definition_message($header->{localMessageType});
+				$self->_parse_definition_message($header);
 			}
 			else {
 				$self->_debug("Record Header for LocalMessageType=" . $header->{localMessageType});
@@ -243,7 +243,8 @@ sub getHandler {
 
 sub _parse_definition_message {
 	my $self = shift;
-	my $localMessageType = shift;
+	my $header = shift;
+	my $localMessageType = $header->{localMessageType};
 
 	my $data = $self->_readBytes(5);
 	my ($reserved, $arch, $globalMessageId, $fields) = unpack("ccsc", $data);
@@ -254,7 +255,21 @@ sub _parse_definition_message {
 	$self->_debug("Arch: $arch - GlobalMessage: " . ($globalMessageType->{name} || "<UNKNOWN_GLOBAL_MESSAGE>") . " ($globalMessageId) - #Fields: $fields");
 	carp "BigEndian isn't supported so far!" if($arch == 1);
 
-	my $localMessage = $self->_parse_defintion_message_fields($globalMessageType, $fields);
+	my ($messageFields, $recordLength) = ([], 0);
+
+	if(defined $globalMessageType) {
+		($messageFields, $recordLength) = $self->_parse_defintion_message_fields($globalMessageType, $fields);
+	}
+
+
+	my $localMessage = {
+		size => $recordLength,
+		dataFields => $messageFields,
+		globalMessage => $globalMessageType,,
+		unpackTemplate => join("", map { $_->{baseType}->{packTemplate} } @$messageFields),
+		isDeveloperMessage => $header->{isDeveloperData},
+		isUnknownMessage => !!defined $globalMessageType,
+	};
 
 	$self->{localMessages}->[$localMessageType] = $localMessage;
 
@@ -276,20 +291,22 @@ sub _parse_defintion_message_fields {
 		my ($baseTypeEndian, $baseTypeNumber) = ($baseTypeData & 128, $baseTypeData & 15);
 		my $baseType = $self->_get_base_type($baseTypeNumber);
 		my $fieldDescriptor = $globalMessageType->{fields}->{$fieldDefinition};
-		my $fieldName = $fieldDescriptor->{name} || "<UNKNOWN_FIELD_NAME>";
+
+		if(!defined $fieldDescriptor) {
+			$fieldDescriptor = {
+				isUnkownField => 1,
+				name => "<UNKNOWN_FIELD_NAME>"
+			};
+		}
+
+		my $fieldName = $fieldDescriptor->{name};
 		$self->_debug("FieldDefinition: Nr: $fieldDefinition (" . $fieldName . "), Size: $size, BaseType: " . $baseType->{name} . " ($baseTypeNumber), BaseTypeEndian: $baseTypeEndian");
 		$recordLength += $size;
-		push(@dataFields, { baseType => $baseType, fieldId => $fieldDefinition, fieldName => $fieldName, fieldDescriptor => $fieldDescriptor });
+
+		push(@dataFields, { baseType => $baseType, fieldDescriptor => $fieldDescriptor });
 	}
 
-	my $localMessage = {
-		size => $recordLength,
-		dataFields => \@dataFields,
-		globalMessageId => $globalMessageType->{id},
-		globalMessage => $globalMessageType,
-	};
-
-	return $localMessage;
+	return (\@dataFields, $recordLength);
 }
 
 sub _global_message_id_to_name {
@@ -400,6 +417,19 @@ sub _global_message_id_to_name {
 	}
 }
 
+sub getLocalMessageById {
+	my $self = shift;
+	my $localMessageId = shift;
+
+	my $localMessage = $self->{localMessages}->[$localMessageId];
+
+	if(!defined $localMessage) {
+		die "Encountered a record  localMessageId=$localMessageId which was not introduced by a definition message!";
+	}
+
+	return $localMessage;
+}
+
 sub _get_global_message_type {
 	my $self = shift;
 
@@ -421,20 +451,14 @@ sub _parse_local_message_record {
 	my $self = shift;
 	my $header = shift;
 
-	my $localMessage = $self->{localMessages}->[$header->{localMessageType}];
-
-	if(!defined $localMessage) {
-		die "Encountered record for LocalMessageNumber=" . $header->{localMessageType} . " which was not preceded by a matching definition message!";
-	}
+	my $localMessageId = $header->{localMessageType};
+	my $localMessage = $self->getLocalMessageById($localMessageId);
 
 	my $recordLength = $localMessage->{size};
 	my $record = $self->_readBytes($recordLength);
 
-	my $unpackTemplate = join("", map { $_->{baseType}->{packTemplate} } @{$localMessage->{dataFields}});
-	my @rawFields;
-	foreach($localMessage->{dataFields}) {
-		push(@rawFields, unpack($unpackTemplate, $record));
-	}
+	my $unpackTemplate = $localMessage->{unpackTemplate};
+	my @rawFields = unpack($unpackTemplate, $record);
 
 	my $globalMessageType = $localMessage->{globalMessage};
 
@@ -445,8 +469,12 @@ sub _parse_local_message_record {
 		my $localMessageField = $localMessage->{dataFields}->[$i];
 		my $rawValue = $rawFields[$i];
 
-		my $fieldName = $localMessageField->{fieldName};
 		my $fieldDescriptor = $localMessageField->{fieldDescriptor};
+		my $fieldName = $fieldDescriptor->{name};
+
+		if($fieldDescriptor->{isUnkownField}) {
+			next;
+		}
 
 		my $postProcessedValue = $self->postProcessRawValue($rawValue, $fieldDescriptor);
 
