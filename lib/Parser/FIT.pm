@@ -167,7 +167,6 @@ sub _parse_data_records {
 	while($self->{totalBytesRead} < $self->{header}->{eof}) {
 		
 		my ($recordHeaderByte) = unpack("c", $self->_readBytes(1));
-		# my $recordHeaderByte = $self->_readBytes(1);
 		$self->_debug("HeaderBytes in Binary: " . sprintf("%08b", $recordHeaderByte));
 		my $header = $self->_parse_record_header($recordHeaderByte);
 
@@ -181,19 +180,16 @@ sub _parse_data_records {
 				$self->_parse_definition_message($header);
 			}
 			else {
-				$self->_debug("Record Header for LocalMessageType=" . $header->{localMessageType});
-				my $localMessage = $self->_parse_local_message_record($header);
+				my $parseResult = $self->_parse_local_message_record($header);
 
-				if(!defined $localMessage->{globalMessageType}) {
-					$self->_debug("Undefined record. Skipping");
+				if(!defined $parseResult) {
+					$self->_debug("Skipping record for unknown LocalMessageType=" . $header->{localMessageType});
 					next;
 				}
+				
+				$self->_debug("Processed record for LocalMessageType=" . $header->{localMessageType});
 
-				my $globalMessageName = $localMessage->{globalMessageType}->{name};
-
-				my $msgType = $globalMessageName;
-				my $msgData = $localMessage->{data};
-				$self->emitRecord($msgType, $msgData);
+				$self->emitRecord($parseResult->{messageType}, $parseResult->{fields});
 
 				$self->{records}++;
 			}
@@ -234,6 +230,10 @@ sub getHandler {
 	my $self = shift;
 	my $msgType = shift;
 
+	if(!$msgType) {
+		die "cannot get a handler for an unknown msgType!";
+	}
+
 	if(exists $self->{messageHandlers}->{$msgType}) {
 		return $self->{messageHandlers}->{$msgType};
 	}
@@ -252,7 +252,7 @@ sub _parse_definition_message {
 	my $globalMessageType = $self->_get_global_message_type($globalMessageId);
 
 	$self->_debug("DefinitionMessageHeader:");
-	$self->_debug("Arch: $arch - GlobalMessage: " . ($globalMessageType->{name} || "<UNKNOWN_GLOBAL_MESSAGE>") . " ($globalMessageId) - #Fields: $fields");
+	$self->_debug("Arch: $arch - GlobalMessage: " . (defined $globalMessageType ? $globalMessageType->{name} : "<UNKNOWN_GLOBAL_MESSAGE>") . " ($globalMessageId) - #Fields: $fields");
 	carp "BigEndian isn't supported so far!" if($arch == 1);
 
 	my ($messageFields, $recordLength) = ([], 0);
@@ -261,14 +261,13 @@ sub _parse_definition_message {
 		($messageFields, $recordLength) = $self->_parse_defintion_message_fields($globalMessageType, $fields);
 	}
 
-
 	my $localMessage = {
 		size => $recordLength,
 		dataFields => $messageFields,
 		globalMessage => $globalMessageType,,
 		unpackTemplate => join("", map { $_->{baseType}->{packTemplate} } @$messageFields),
 		isDeveloperMessage => $header->{isDeveloperData},
-		isUnknownMessage => !!defined $globalMessageType,
+		isUnknownMessage => !defined $globalMessageType,
 	};
 
 	$self->{localMessages}->[$localMessageType] = $localMessage;
@@ -457,6 +456,11 @@ sub _parse_local_message_record {
 	my $recordLength = $localMessage->{size};
 	my $record = $self->_readBytes($recordLength);
 
+	# skip unknown messages (the _readBytes above is correct, since we need to "remove" the bytes from the stream)
+	if($localMessage->{isUnknownMessage}) {
+		return undef;
+	}
+
 	my $unpackTemplate = $localMessage->{unpackTemplate};
 	my @rawFields = unpack($unpackTemplate, $record);
 
@@ -485,7 +489,10 @@ sub _parse_local_message_record {
 		};
 	}
 
-	return { globalMessageType => $globalMessageType, globalMessageId => $localMessage->{globalMessageId}, data => \%result };
+	return {
+		messageType => $localMessage->{globalMessage}->{name},
+		fields => \%result
+	};
 }
 
 sub postProcessRawValue {
