@@ -16,5 +16,5 @@ jobs:
         run: prove -vlr
       - name: Generate coverage report
         env: 
-          GITHUB_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
         run: cover -test -report coveralls
