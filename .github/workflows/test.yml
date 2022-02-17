@@ -10,8 +10,8 @@ jobs:
       - uses: shogo82148/actions-setup-perl@v1
         with:
           perl-version: '5.34'
-      - name: Install dependencies
-        run: cpanm --installdeps --with-develop .
+          install-modules-with: cpanm
+          install-modules-args: --with-develop
       - name: Run unit tests
         run: prove -vlr
       - name: Generate coverage report
