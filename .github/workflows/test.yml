@@ -15,4 +15,6 @@ jobs:
       - name: Run unit tests
         run: prove -vlr
       - name: Generate coverage report
+        env: 
+          GITHUB_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
         run: cover -test -report coveralls
