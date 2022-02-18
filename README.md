@@ -1,3 +1,6 @@
+![Tests](https://github.com/ghandmann/parser-fit/actions/workflows/test.yml/badge.svg)
+[![Coverage Status](https://coveralls.io/repos/github/ghandmann/parser-fit/badge.svg?branch=main)](https://coveralls.io/github/ghandmann/parser-fit?branch=main)
+
 # Parse FIT (Flexibel & Interopberable data Transfer) Files
 
 ## FIT SDK and Documentation
