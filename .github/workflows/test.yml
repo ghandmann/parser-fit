@@ -23,4 +23,4 @@ jobs:
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
         run: |
           perl Makefile.PL
-          cover -test -report coveralls
+          cover -test -report coveralls +ignore '^local\/lib'
