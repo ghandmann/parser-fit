@@ -1,3 +1,6 @@
+![Tests](https://github.com/ghandmann/parser-fit/actions/workflows/test.yml/badge.svg)
+[![Coverage Status](https://coveralls.io/repos/github/ghandmann/parser-fit/badge.svg?branch=main)](https://coveralls.io/github/ghandmann/parser-fit?branch=main)
+
 # Parse FIT (Flexibel & Interopberable data Transfer) Files
 
 ## FIT SDK and Documentation
@@ -25,4 +28,4 @@ You may use the command line option `-f` to overwrite an already existing `Profi
 
 * Provide an event based interface (like XML::Parser)
 
-signing test commit
+Test commit to see if dependency caching works. :)

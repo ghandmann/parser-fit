@@ -1,5 +1,9 @@
 name: "Run tests for Parser::FIT"
-on: [pull_request, push]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
   
 jobs:
   test:
@@ -10,5 +14,13 @@ jobs:
       - uses: shogo82148/actions-setup-perl@v1
         with:
           perl-version: '5.34'
-      - run: cpanm --installdeps .
-      - run: prove -lv t
+          install-modules-with: cpanm
+          install-modules-args: --with-develop
+      - name: Run unit tests
+        run: prove -vlr
+      - name: Generate coverage report
+        env: 
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
+        run: |
+          perl Makefile.PL
+          cover -test -report coveralls
