@@ -265,7 +265,7 @@ sub _parse_definition_message {
 		size => $recordLength,
 		dataFields => $messageFields,
 		globalMessage => $globalMessageType,,
-		unpackTemplate => join("", map { $_->{baseType}->{packTemplate} } @$messageFields),
+		unpackTemplate => join("", map { $_->{baseType}->{packTemplate} . '[' . $_->{arrayLength} . ']' } @$messageFields),
 		isDeveloperMessage => $header->{isDeveloperData},
 		isUnknownMessage => !defined $globalMessageType,
 	};
@@ -302,7 +302,7 @@ sub _parse_defintion_message_fields {
 		$self->_debug("FieldDefinition: Nr: $fieldDefinition (" . $fieldName . "), Size: $size, BaseType: " . $baseType->{name} . " ($baseTypeNumber), BaseTypeEndian: $baseTypeEndian");
 		$recordLength += $size;
 
-		push(@dataFields, { baseType => $baseType, fieldDescriptor => $fieldDescriptor });
+		push(@dataFields, { baseType => $baseType, storageSize => $size, isArray => $size > $baseType->{size}, arrayLength => $size/$baseType->{size}, fieldDescriptor => $fieldDescriptor });
 	}
 
 	return (\@dataFields, $recordLength);
