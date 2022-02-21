@@ -2,12 +2,9 @@ use strict;
 use warnings;
 
 use Test::More;
-use Test::Most;
 use FindBin;
 
 use Parser::FIT;
-
-bail_on_fail;
 
 use Data::Dumper;
 my $parser = Parser::FIT->new();
