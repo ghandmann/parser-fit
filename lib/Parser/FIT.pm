@@ -9,7 +9,7 @@ use Parser::FIT::Profile;
 
 #require "Profile.pm";
 
-our $VERSION = 0.04;
+our $VERSION = 0.05;
 
 sub new {
 	my $class = shift;
@@ -279,9 +279,8 @@ sub _parse_definition_message {
 	my ($messageFields, $devMsgFields, $recordLength) = ([], [], 0);
 	my @fields;
 
-	if(defined $globalMessageType) {
-		($messageFields, $recordLength) = $self->_parse_defintion_message_fields($globalMessageType->{fields}, $fields);
-	}
+	my $fieldDefinitions = defined $globalMessageType ? $globalMessageType->{fields} : {};
+	($messageFields, $recordLength) = $self->_parse_defintion_message_fields($fieldDefinitions, $fields);
 
 	if($header->{isDeveloperData}) {
 		($devMsgFields, my $devRecordLength) = $self->parseDeveloperDataDefinitionMessage($globalMessageType);
