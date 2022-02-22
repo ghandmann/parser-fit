@@ -1,5 +1,8 @@
 Revision history for Parser-FIT
 
+0.05    2022-02-22
+        - Implement/Fix unknown global message handling
+        
 0.04    2022-02-21
         - Support developer data
 
