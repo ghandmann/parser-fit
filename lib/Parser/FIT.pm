@@ -331,7 +331,7 @@ sub _parse_defintion_message_fields {
 
 	foreach(1..$numberOfFields) {
 		my $fieldDefinitionData = $self->_readBytes(3); # Every Field has 3 Bytes
-		my ($fieldDefinition, $size, $baseTypeData)  = unpack("Ccc", $fieldDefinitionData);
+		my ($fieldDefinition, $size, $baseTypeData)  = unpack("CCc", $fieldDefinitionData);
 		my ($baseTypeEndian, $baseTypeNumber) = ($baseTypeData & 128, $baseTypeData & 15);
 		my $baseType = $self->_get_base_type($baseTypeNumber);
 		my $fieldDescriptor = $fieldDefinitions->{$fieldDefinition};
