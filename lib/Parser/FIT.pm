@@ -336,6 +336,8 @@ sub _parse_defintion_message_fields {
 		my $baseType = $self->_get_base_type($baseTypeNumber);
 		my $fieldDescriptor = $fieldDefinitions->{$fieldDefinition};
 
+		die "Failed to parse file: Size=$size cannot be 0 or less" if($size <= 0);
+
 		if(!defined $fieldDescriptor) {
 			$fieldDescriptor = {
 				isUnkownField => 1,
