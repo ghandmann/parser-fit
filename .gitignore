@@ -1,8 +1,9 @@
 .vscode/
-
+test.pl
 # Ignore Fit SDKs inside this repository
 **/FitSDKRelease*/
-
+# Ignore example files
+examples/
 
 # .gitignore from GitHub
 !Build/
