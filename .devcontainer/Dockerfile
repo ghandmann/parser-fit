@@ -7,4 +7,4 @@ ENV LC_ALL=C
 
 # Install dependencies
 COPY cpanfile /tmp/cpanfile
-RUN cpanm --installdeps /tmp/ && rm /tmp/cpanfile
+RUN cpanm --installdeps --with-develop /tmp/ && rm /tmp/cpanfile
