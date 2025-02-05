@@ -1,6 +1,6 @@
 FROM docker.io/library/perl:5.40
 
-RUN apt-get update && apt-get install -y gpsbabel && apt-get clean
+RUN apt-get update && apt-get install -y gpsbabel vim bash-completion && apt-get clean
 
 # Set locale to prevent perl complaining
 ENV LC_ALL=C
