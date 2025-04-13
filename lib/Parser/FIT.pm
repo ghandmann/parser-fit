@@ -525,12 +525,20 @@ sub _parse_local_message_record {
 			next;
 		}
 
-		my $postProcessedValue = $self->postProcessRawValue($rawValue, $fieldDescriptor);
+		my $postProcessedValue = undef;
+		my $baseType = $localMessageField->{baseType};
+
+		my $isValid = $self->_check_for_valid_value($baseType, $rawValue);
+
+		if($isValid) {
+			$postProcessedValue = $self->postProcessRawValue($rawValue, $fieldDescriptor);
+		}
 
 		$result{$fieldName} = {
 			value => $postProcessedValue,
 			rawValue => $rawValue,
 			fieldDescriptor => $fieldDescriptor,
+			isInvalid => !$isValid,
 		};
 	}
 
@@ -538,6 +546,20 @@ sub _parse_local_message_record {
 		messageType => $localMessage->{globalMessage}->{name},
 		fields => \%result
 	};
+}
+
+sub _check_for_valid_value {
+	my $self = shift;
+	my $baseType = shift;
+	my $rawValue = shift;
+
+	# All strings are good.
+	if($baseType->{name} eq "string") {
+		return 1;
+	}
+
+	my $isValid = $baseType->{invalid} != $rawValue;
+	return $isValid;
 }
 
 sub postProcessRawValue {
@@ -637,6 +659,7 @@ sub _get_base_type {
 			name => "uint8z",
 			size => 1,
 			invalid => 0x00,
+			# TODO this should be a capital C since it is unsigned!
 			packTemplate => "c"
 		},
 		{
