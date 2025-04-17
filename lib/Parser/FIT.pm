@@ -2,7 +2,7 @@ package Parser::FIT;
 
 use strict;
 use warnings;
-use Carp qw/croak carp/;
+use Carp qw/croak confess/;
 use feature 'state';
 use Math::BigInt;
 use Parser::FIT::Profile;
@@ -274,7 +274,7 @@ sub _parse_definition_message {
 
 	$self->_debug("DefinitionMessageHeader:");
 	$self->_debug("Arch: $arch - GlobalMessage: " . (defined $globalMessageType ? $globalMessageType->{name} : "<UNKNOWN_GLOBAL_MESSAGE>") . " ($globalMessageId) - #Fields: $fields");
-	carp "BigEndian isn't supported so far!" if($arch == 1);
+	confess "BigEndian isn't supported so far!" if($arch == 1);
 
 	my ($messageFields, $devMsgFields, $recordLength) = ([], [], 0);
 	my @fields;
