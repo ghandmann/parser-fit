@@ -44,7 +44,7 @@ my @recordDefinitionMsg = (
 
 my @recordData = (
     0x01, # Normal data header for LocalMesg=1
-    0x49, 0x96, 0x02, 0xD2 # 4 Bytes for uint32z timestamp=1234567890
+    0xd2, 0x02, 0x96, 0x49 # 4 Bytes for uint32z timestamp=1234567890
     );
 
 
