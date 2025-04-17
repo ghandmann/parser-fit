@@ -21,13 +21,13 @@ my $parser = Parser::FIT->new(on => {
 });
 
 # Special file from the FIT SDK containing records with invalid fields
-my $fileWithInvalidFields = $FindBin::Bin . "/../FitSDKRelease_21.67.00/examples/activity_lowbattery.fit";
+my $fileWithInvalidFields = $FindBin::Bin . "/test-files/activity_lowbattery.fit";
 $parser->parse($fileWithInvalidFields);
 
-is($invalidCadenceFields, 13, "Expected 13 invalid cadence fields in '/examples/activity_lowbattery.fit'") or
+is($invalidCadenceFields, 13, "Expected 13 invalid cadence fields in '/test-files/activity_lowbattery.fit'") or
     diag("This test relies on a special FIT file containing invalid values (activity_lowbattery.fit contained invalid speed and cadence fields). If it fails, maybe the file has changed?");
 
-is($invalidSpeedFields, 19, "Expected 19 invalid speed fields in '/examples/activity_lowbattery.fit'") or 
+is($invalidSpeedFields, 19, "Expected 19 invalid speed fields in '/test-files/activity_lowbattery.fit'") or 
     diag("This test relies on a special FIT file containing invalid values (activity_lowbattery.fit contained invalid speed and cadence fields). If it fails, maybe the file has changed?");
 
 done_testing;
