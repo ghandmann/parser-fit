@@ -289,11 +289,30 @@ sub _parse_definition_message {
 
 	my $combinedDataFields = [@$messageFields, @$devMsgFields];
 
+	my $buildPackTemplate = sub {
+		my $dataField = shift;
+
+		my $templateChar = $dataField->{baseType}->{packTemplate};
+		my $arrayLength = $dataField->{arrayLength};
+		my $fieldName = $dataField->{fieldDescriptor}->{name};
+		my $fieldDatatype = $dataField->{fieldDescriptor}->{type} || "<UNKNOWN_DATA_TYPE>";
+
+		my $templateString = "${templateChar}";
+
+		if($arrayLength > 1) {
+			$templateString .= "[${arrayLength}]";
+		}
+
+		$templateString .= " # $fieldName baseType=$fieldDatatype baseTypeSize=$dataField->{baseType}->{size}, storageSize=$dataField->{storageSize}, byteOffsetInMessage=" . $dataField->{byteOffsetInMessage};
+
+		return $templateString;
+	};
+
 	my $localMessage = {
 		size => $recordLength,
 		dataFields => $combinedDataFields,
 		globalMessage => $globalMessageType,,
-		unpackTemplate => join("", map { $_->{baseType}->{packTemplate} . '[' . $_->{arrayLength} . ']' } @$combinedDataFields),
+		unpackTemplate => join("\n", map { $buildPackTemplate->($_) } @$combinedDataFields),
 		isDeveloperMessage => $header->{isDeveloperData},
 		isUnknownMessage => !defined $globalMessageType,
 	};
@@ -329,27 +348,39 @@ sub _parse_defintion_message_fields {
 
 	my @dataFields;
 
-	foreach(1..$numberOfFields) {
+	my $byteOffsetInMessage = 0;
+	foreach my $i (1..$numberOfFields) {
 		my $fieldDefinitionData = $self->_readBytes(3); # Every Field has 3 Bytes
-		my ($fieldDefinition, $size, $baseTypeData)  = unpack("CCc", $fieldDefinitionData);
+		my ($fieldDefinitionId, $size, $baseTypeData)  = unpack("CCc", $fieldDefinitionData);
 		my ($baseTypeEndian, $baseTypeNumber) = ($baseTypeData & 128, $baseTypeData & 15);
 		my $baseType = $self->_get_base_type($baseTypeNumber);
-		my $fieldDescriptor = $fieldDefinitions->{$fieldDefinition};
+		my $fieldDescriptor = $fieldDefinitions->{$fieldDefinitionId};
 
 		die "Failed to parse file: Size=$size cannot be 0 or less" if($size <= 0);
 
 		if(!defined $fieldDescriptor) {
 			$fieldDescriptor = {
 				isUnkownField => 1,
-				name => "<UNKNOWN_FIELD_NAME>"
+				name => "<UNKNOWN_FIELD_NAME>",
+				type => $baseType->{name},
 			};
 		}
 
 		my $fieldName = $fieldDescriptor->{name};
-		$self->_debug("FieldDefinition: Nr: $fieldDefinition (" . $fieldName . "), Size: $size, BaseType: " . $baseType->{name} . " ($baseTypeNumber), BaseTypeEndian: $baseTypeEndian");
+		$self->_debug("FieldDefinition[$i]: $fieldName ($fieldDefinitionId), Size: $size, BaseType: " . $baseType->{name} . " ($baseTypeNumber), BaseTypeEndian: $baseTypeEndian");
 		$recordLength += $size;
 
-		push(@dataFields, { baseType => $baseType, storageSize => $size, isArray => $size > $baseType->{size}, arrayLength => $size/$baseType->{size}, fieldDescriptor => $fieldDescriptor });
+		my $fieldDefinition = {
+			baseType => $baseType,
+			storageSize => $size,
+			isArray => $size > $baseType->{size},
+			arrayLength => $size/$baseType->{size},
+			fieldDescriptor => $fieldDescriptor,
+			byteOffsetInMessage => $byteOffsetInMessage
+		};
+
+		push(@dataFields, $fieldDefinition);
+		$byteOffsetInMessage += $size;
 	}
 
 	return (\@dataFields, $recordLength);
