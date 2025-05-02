@@ -545,9 +545,22 @@ sub _parse_local_message_record {
 	my %result;
 
 	my $fieldCount = scalar @{$localMessage->{dataFields}};
+	my $rawValueIndex = 0;
 	for(my $i = 0; $i < $fieldCount; $i++) {
 		my $localMessageField = $localMessage->{dataFields}->[$i];
-		my $rawValue = $rawFields[$i];
+		my $rawValue = $rawFields[$rawValueIndex];
+
+		# Special case for strings:
+		# The pack/unpack template for strings looks like an array (e.G. Z[32]) but does not produce
+		# multiple entries after unpacking, but only a single one.
+		# Therefore after reading a string we should only proceed to the next entry.
+		# While reading a uint8 array (e.G. c[4]) we must skip 4 entries to arrive at the next field.
+		if($localMessageField->{baseType}->{name} eq "string") {
+			$rawValueIndex += 1;
+		}
+		else {
+			$rawValueIndex += $localMessageField->{arrayLength};
+		}
 
 		my $fieldDescriptor = $localMessageField->{fieldDescriptor};
 		my $fieldName = $fieldDescriptor->{name};
