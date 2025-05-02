@@ -1,4 +1,7 @@
 Revision history for Parser-FIT
+0.10    2025-05-02
+        - Add handling of fields with array values
+
 0.09    2025-02-05
         - Add 'use strict' to missing modules
         - Added Mojolicious dev-dependency

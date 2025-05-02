@@ -9,7 +9,7 @@ use Parser::FIT::Profile;
 
 #require "Profile.pm";
 
-our $VERSION = 0.09;
+our $VERSION = 0.10;
 
 sub new {
 	my $class = shift;
