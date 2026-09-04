@@ -1,0 +1,3 @@
+[submodule "fit-sdk-tools"]
+	path = fit-sdk-tools
+	url = git@github.com:garmin/fit-sdk-tools.git
